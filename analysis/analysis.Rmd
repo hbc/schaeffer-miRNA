@@ -1,0 +1,145 @@
+---
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    highlight: zenburn
+    theme: flatly
+---
+
+```{r load-data}
+infn = "../data/Int Hypox Invitro and Human Meta Data.csv"
+metadata = read.table(infn, sep=",", header=TRUE)
+```
+
+Here we make the coding for the variables easier to work with by making them
+smaller and removing spaces and other problem-causing characters. We will
+also make an ID that has the important metadata in it, to make plots
+easier to interpet.
+
+```{r recode-metdata}
+date2month = function(str) {
+  month = months(as.Date(str, format="%m.%d.%y"))
+  return(substring(month, 1, 3))
+}
+metadata$month = as.factor(unlist(lapply(metadata$Experiment.Date, date2month)))
+metadata$line = as.factor(gsub(" ", "", metadata$Cell.Line))
+metadata$spiked = as.factor(ifelse(grepl("No", metadata$Spike.In ), "spike",
+                                   "nospike"))
+metadata$hypoxia = as.factor(ifelse(grepl("Intermittent", metadata$Condition), "IH",
+                             ifelse(grepl("Sustained", metadata$Condition), "SH",
+                                    "NO")))
+metadata$filename = metadata$RCC.FILE.NAME
+metadata$fullname = metadata$Full.Sample.Name
+metadata$column = ifelse(grepl("Oligo", metadata$Column), "oligo",
+                  ifelse(grepl("Reg", metadata$Column), "reg", "nocol"))
+metadata$replicate = unlist(lapply(metadata$Replicate.Number,
+                                   function(x) strsplit(as.character(x), "-")[[1]][2]))
+metadata$id = as.factor(paste(metadata$line, metadata$hypoxia, metadata$spiked,
+                              metadata$column, metadata$month, sep="_"))
+rownames(metadata) = metadata$id
+metadata = metadata[, c("id", "month", "line", "spiked", "hypoxia", "filename",
+                        "fullname", "column", "replicate")]
+```
+
+Now we are ready to roll and can read in the RCC files using the sweet
+`NanoStringQCPro` library. We'll just read it in, extract the counts and
+then actually do the analysis with DESeq2.
+
+```{r read-nstring}
+library(NanoStringQCPro)
+rccFiles = paste("../data/rcc/", metadata[,"filename"], sep="")
+eset = newRccSet(rccFiles=rccFiles)
+counts = as.data.frame(exprs(eset))
+colnames(counts) = metadata$id
+```
+
+## Positive controls
+Positive controls look like some of them worked, and some of them didn't.
+```{r positive-controls}
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+is_positive = function(column) {
+  return(grepl("Pos", column))
+}
+is_negative = function(column) {
+  return(grepl("Neg", column))
+}
+is_spikein = function(column) {
+  return(grepl("Spike", column))
+}
+is_ligation = function(column) {
+  return(grepl("Ligati", column))
+}
+is_housekeeping = function(column) {
+  return(grepl("Housekee", column))
+}
+
+extract_pred = function(counts, predicate) {
+  toplot = counts[predicate(rownames(counts)),] %>%
+    tibble::rownames_to_column() %>%
+    tidyr::gather("sample", "count", -rowname)
+  colnames(toplot) = c("spot", "sample", "count")
+  return(toplot)
+}
+spotbarplot = function(toplot) {
+  ggplot(toplot,
+        aes(sample, count)) + geom_bar(stat='identity') +
+    facet_wrap(~spot) +
+    theme(axis.text.x = element_blank(),
+          text = element_text(size=8))
+}
+spotbarplot(extract_pred(counts, is_positive))
+```
+
+## Negative controls
+Negative counts can be relatively high in some of the samples compared to
+the other samples.
+
+```{r negative-controls}
+spotbarplot(extract_pred(counts, is_negative))
+```
+
+It looks like all of those samples have something in common:
+
+```{r high-negative}
+knitr::kable(subset(extract_pred(counts, is_negative), count > 50))
+```
+
+Was anything different about those samples?
+
+## SpikeIn
+It looks like there are some samples that have spike-ins
+```{r spikein}
+spotbarplot(extract_pred(counts, is_spikein))
+```
+
+But those samples aren't labelled as having spike-ins in the metadata:
+
+```{r spike-in-samples}
+knitr::kable(subset(extract_pred(counts, is_spikein), count > 500))
+```
+
+They are all from October and January though. Is the metadata not correct
+about the spike ins for these samples?
+
+## Ligation
+Only some of the ligation controls show up
+```{r ligation}
+spotbarplot(extract_pred(counts, is_ligation))
+```
+
+## Housekeeping
+For a subset of the samples, one housekeeping gene is very high.
+```{r housekeeping}
+spotbarplot(extract_pred(counts, is_housekeeping))
+```
+
+These don't look confined to any particular cell type. Why are some of these
+so different?
+
+```{r housekeeping-samples}
+table(subset(extract_pred(counts, is_housekeeping), count > 1000)$sample)
+```
