@@ -260,15 +260,25 @@ standard error of the fold changes. Signal to noise ratio here is combined
 as the log fold change divided by the log fold change standard error.
 
 ```{r THP}
+write_results = function(res, fname) {
+  res = data.frame(res) %>% tibble::rownames_to_column() %>%
+    arrange(pvalue)
+  write.table(res, file=fname, quote=FALSE, col.names=TRUE,
+              row.names=FALSE, sep=",")
+}
+
 res = results(dds, contrast=c("linehypo", "THP_NO", "THP_IH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("THP NO vs IH")
+write_results(res, "THP_NOvsIH.csv")
 res = results(dds, contrast=c("linehypo", "THP_NO", "THP_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("THP NO vs SH")
+write_results(res, "THP_NOvsSH.csv")
 res = results(dds, contrast=c("linehypo", "THP_IH", "THP_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("THP IH vs SH")
+write_results(res, "THP_IHvsSH.csv")
 ```
 
 ### Huh7
@@ -276,12 +286,15 @@ ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
 res = results(dds, contrast=c("linehypo", "Huh7_NO", "Huh7_IH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("Huh7 NO vs IH")
+write_results(res, "Huh7_NOvsIH.csv")
 res = results(dds, contrast=c("linehypo", "Huh7_NO", "Huh7_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("Huh7 NO vs SH")
+write_results(res, "Huh7_NOvsSH.csv")
 res = results(dds, contrast=c("linehypo", "Huh7_IH", "Huh7_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("Huh7 IH vs SH")
+write_results(res, "Huh7_IHvsSH.csv")
 ```
 
 ### U937
@@ -290,12 +303,15 @@ ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
 res = results(dds, contrast=c("linehypo", "U937_NO", "U937_IH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("U937 NO vs IH")
+write_results(res, "U937_NOvsIH.csv")
 res = results(dds, contrast=c("linehypo", "U937_NO", "U937_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("U937 NO vs SH")
+write_results(res, "U937_NOvsSH.csv")
 res = results(dds, contrast=c("linehypo", "U937_IH", "U937_SH"), addMLE=TRUE)
 ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
   ylab("signal to noise ratio") + ggtitle("U937 IH vs SH")
+write_results(res, "U937_IHvsSH.csv")
 ```
 
 # Prior miRNA
