@@ -25,11 +25,12 @@ date2month = function(str) {
 }
 metadata$month = as.factor(unlist(lapply(metadata$Experiment.Date, date2month)))
 metadata$line = as.factor(gsub(" ", "", metadata$Cell.Line))
-metadata$spiked = as.factor(ifelse(grepl("No", metadata$Spike.In ), "spike",
-                                   "nospike"))
+metadata$spiked = as.factor(ifelse(grepl("No", metadata$Spike.In ), "nospike",
+                                   "spike"))
 metadata$hypoxia = as.factor(ifelse(grepl("Intermittent", metadata$Condition), "IH",
                              ifelse(grepl("Sustained", metadata$Condition), "SH",
                                     "NO")))
+metadata$hypoxia = relevel(metadata$hypoxia, ref="NO")
 metadata$filename = metadata$RCC.FILE.NAME
 metadata$fullname = metadata$Full.Sample.Name
 metadata$column = ifelse(grepl("Oligo", metadata$Column), "oligo",
@@ -38,9 +39,6 @@ metadata$replicate = unlist(lapply(metadata$Replicate.Number,
                                    function(x) strsplit(as.character(x), "-")[[1]][2]))
 metadata$id = as.factor(paste(metadata$line, metadata$hypoxia, metadata$spiked,
                               metadata$column, metadata$month, sep="_"))
-rownames(metadata) = metadata$id
-metadata = metadata[, c("id", "month", "line", "spiked", "hypoxia", "filename",
-                        "fullname", "column", "replicate")]
 ```
 
 Now we are ready to roll and can read in the RCC files using the sweet
@@ -76,12 +74,16 @@ is_ligation = function(column) {
 is_housekeeping = function(column) {
   return(grepl("Housekee", column))
 }
+is_prior = function(column) {
+  return(grepl("miR-210", column) | grepl("miR-365", column))
+}
 
 extract_pred = function(counts, predicate) {
   toplot = counts[predicate(rownames(counts)),] %>%
     tibble::rownames_to_column() %>%
     tidyr::gather("sample", "count", -rowname)
   colnames(toplot) = c("spot", "sample", "count")
+  toplot = toplot %>% left_join(metadata, by=c("sample"="id"))
   return(toplot)
 }
 spotbarplot = function(toplot) {
@@ -90,6 +92,12 @@ spotbarplot = function(toplot) {
     facet_wrap(~spot) +
     theme(axis.text.x = element_blank(),
           text = element_text(size=8))
+}
+spotboxplot = function(toplot) {
+  ggplot(toplot,
+        aes(linehypo, count)) + geom_boxplot() +
+    facet_wrap(~spot) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
 }
 spotbarplot(extract_pred(counts, is_positive))
 ```
@@ -116,7 +124,7 @@ It looks like there are some samples that have spike-ins
 spotbarplot(extract_pred(counts, is_spikein))
 ```
 
-But those samples aren't labelled as having spike-ins in the metadata:
+And those correspond to the spike-ins in the metadata:
 
 ```{r spike-in-samples}
 knitr::kable(subset(extract_pred(counts, is_spikein), count > 500))
@@ -142,4 +150,158 @@ so different?
 
 ```{r housekeeping-samples}
 table(subset(extract_pred(counts, is_housekeeping), count > 1000)$sample)
+```
+
+## Drop non-negative control and housekeeping
+```{r drop-unusable}
+keep = counts[!(is_spikein(rownames(counts)) | is_positive(rownames(counts)) |
+                is_housekeeping(rownames(counts)) | is_ligation(rownames(counts))),]
+```
+
+## Drop genes below noise floor
+We'll normalize the libraries and look at the negative control expression and
+then come up with a cutoff that is above the noise floor for the libraries.
+
+```{r normalize-deseq2}
+library(DESeq2)
+dds = DESeqDataSetFromMatrix(keep, colData=metadata, design=~month+column+line+hypoxia)
+dds = estimateSizeFactors(dds)
+ncounts = data.frame(counts(dds, normalized=TRUE))
+```
+
+Below we can see after normalizing by library size, if we set the cutoff to be
+30, we are mostly above the noise floor measured by the negative controls:
+
+```{r neg-cutoff}
+ggplot(extract_pred(ncounts, is_negative), aes(count)) + geom_histogram()
+```
+
+We used the threshold of 30 as the noise floor and dropped all" miRNA that did
+not have at least 30 counts in 20% of the samples.
+
+```{r drop-mirna}
+keepgenes = ncounts[rowSums(ncounts > 30) > 0.2*ncol(ncounts),]
+```
+
+This left us with `r nrow(keepgenes)` miRNA to consider out of the original
+`r nrow(ncounts)`.
+
+## Differential expression
+
+```{r de-setup}
+dds = DESeqDataSetFromMatrix(counts[rownames(keepgenes),], colData=metadata,
+                             design=~column+spiked+line+hypoxia)
+dds = DESeq(dds, fitType='local')
+```
+
+Nanostring data has an opposite mean-variance relationship than RNA-seq data.
+Here the dispersion is slightly higher for more highly expressed miRNA-- the
+the trend is mostly flat, however.
+
+```{r mirna-dispersion}
+plotDispEsts(dds)
+```
+
+## Cell line differences
+Here we ask, controlling for the month, the column and the hypoxic state of the
+cell line, are there differences between the cell lines. The cell lines are
+very different from each other, most of the miRNA are significantly different
+between the cell lines.
+
+### Huh7 vs U937
+```{r huh7-vs-u937}
+res = results(dds, contrast=c("line", "Huh7", "U937"))
+```
+
+### Huh7 vs THP
+```{r huh7-vs-thp}
+res = results(dds, contrast=c("line", "Huh7", "THP"))
+```
+
+### THP vs U937
+```{r THP-vs-U937}
+res = results(dds, contrast=c("line", "THP", "U937"))
+```
+
+## Hypoxic state differences
+Here we are asking, controlling for the month, column and the cell line, are
+there differences due to hypoxic state?
+
+### Normal vs intermittent
+```{r no-vs-ih}
+res = results(dds, contrast=c("hypoxia", "NO", "IH"))
+```
+
+### Intermittent vs sustained
+```{r ih-vs-sh}
+res = results(dds, contrast=c("hypoxia", "IH", "SH"))
+```
+
+### Normal vs sustained
+```{r no-vs-sh}
+res = results(dds, contrast=c("hypoxia", "NO", "SH"))
+```
+
+## Cell line specific hypoxic state differences
+Here we refit the model with a new factor that is a combination of cell line
+and hypoxic state. Then we test if there are differences between the hypoxic
+states within each cell line.
+
+```{r refit-model}
+metadata$linehypo = paste(metadata$line, metadata$hypoxia, sep="_")
+dds = DESeqDataSetFromMatrix(counts[rownames(keepgenes),], colData=metadata,
+                             design=~column+spiked+linehypo)
+dds = DESeq(dds, fitType='local')
+```
+
+### THP
+We can se that the overall fold changes are fairly small relative to the
+standard error of the fold changes. Signal to noise ratio here is combined
+as the log fold change divided by the log fold change standard error.
+
+```{r THP}
+res = results(dds, contrast=c("linehypo", "THP_NO", "THP_IH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("THP NO vs IH")
+res = results(dds, contrast=c("linehypo", "THP_NO", "THP_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("THP NO vs SH")
+res = results(dds, contrast=c("linehypo", "THP_IH", "THP_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("THP IH vs SH")
+```
+
+### Huh7
+```{r Huh7}
+res = results(dds, contrast=c("linehypo", "Huh7_NO", "Huh7_IH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("Huh7 NO vs IH")
+res = results(dds, contrast=c("linehypo", "Huh7_NO", "Huh7_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("Huh7 NO vs SH")
+res = results(dds, contrast=c("linehypo", "Huh7_IH", "Huh7_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("Huh7 IH vs SH")
+```
+
+### U937
+
+```{r u937}
+res = results(dds, contrast=c("linehypo", "U937_NO", "U937_IH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("U937 NO vs IH")
+res = results(dds, contrast=c("linehypo", "U937_NO", "U937_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("U937 NO vs SH")
+res = results(dds, contrast=c("linehypo", "U937_IH", "U937_SH"), addMLE=TRUE)
+ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
+  ylab("signal to noise ratio") + ggtitle("U937 IH vs SH")
+```
+
+# Prior miRNA
+miR-210 is below the noise floor-- one of the miR-365 spots though has
+higher expression values.
+```{r plot-prior}
+spotbarplot(extract_pred(counts, is_prior)) + scale_y_log10()
+spotboxplot(extract_pred(counts, is_prior))
 ```
