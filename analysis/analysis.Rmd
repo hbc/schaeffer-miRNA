@@ -10,7 +10,7 @@ output:
 
 ```{r load-data}
 infn = "../data/Int Hypox Invitro and Human Meta Data.csv"
-metadata = read.table(infn, sep=",", header=TRUE)
+metadata = read.table(infn, sep=",", header=TRUE, stringsAsFactors=FALSE)
 ```
 
 Here we make the coding for the variables easier to work with by making them
@@ -23,6 +23,7 @@ date2month = function(str) {
   month = months(as.Date(str, format="%m.%d.%y"))
   return(substring(month, 1, 3))
 }
+
 metadata$month = as.factor(unlist(lapply(metadata$Experiment.Date, date2month)))
 metadata$line = as.factor(gsub(" ", "", metadata$Cell.Line))
 metadata$spiked = as.factor(ifelse(grepl("No", metadata$Spike.In ), "nospike",
@@ -37,8 +38,10 @@ metadata$column = ifelse(grepl("Oligo", metadata$Column), "oligo",
                   ifelse(grepl("Reg", metadata$Column), "reg", "nocol"))
 metadata$replicate = unlist(lapply(metadata$Replicate.Number,
                                    function(x) strsplit(as.character(x), "-")[[1]][2]))
-metadata$id = as.factor(paste(metadata$line, metadata$hypoxia, metadata$spiked,
-                              metadata$column, metadata$month, sep="_"))
+metadata$id = as.character(paste(metadata$line, metadata$hypoxia, metadata$spiked,
+                                 metadata$column, metadata$month, sep="_"))
+metadata$id = ifelse(grepl("Blank", metadata$id), metadata$Full.Sample.Name,
+                     metadata$id)
 ```
 
 Now we are ready to roll and can read in the RCC files using the sweet
@@ -48,17 +51,17 @@ then actually do the analysis with DESeq2.
 ```{r read-nstring}
 library(NanoStringQCPro)
 rccFiles = paste("../data/rcc/", metadata[,"filename"], sep="")
-eset = newRccSet(rccFiles=rccFiles)
+#blanks = c("20160602_ES052616miRNAV3aC2_Blank_11.RCC", "20160602_ES052616miRNAV3aC2_Blank_12.RCC")
+eset = newRccSet(rccFiles=rccFiles, blankLabel="Blank")
+pdata = pData(eset)
+pdata$SampleType = metadata$line
+pData(eset) <- pdata
+proc = preprocRccSet(eset)
 counts = as.data.frame(exprs(eset))
 colnames(counts) = metadata$id
 ```
 
-## Positive controls
-Positive controls look like some of them worked, and some of them didn't.
-```{r positive-controls}
-library(ggplot2)
-library(dplyr)
-library(cowplot)
+```{r predicate-functions}
 is_positive = function(column) {
   return(grepl("Pos", column))
 }
@@ -77,6 +80,67 @@ is_housekeeping = function(column) {
 is_prior = function(column) {
   return(grepl("miR-210", column) | grepl("miR-365", column))
 }
+```
+
+## Scale miRNA with known crosstalk
+A small set of miRNA have known inflated values; Nanostring has a heuristic to
+correct for the inflation via the formula using some supplied constants. Here
+we implement that fix to correct the expression of those miRNA.
+
+```{r add-scaledata}
+correct_miRNA = function(eset) {
+  require(dplyr)
+  fdat = fData(eset)
+  fdat = fdat %>%
+    tidyr::separate(GeneName, c("Name", "scalefactor"), sep='\\|',
+                    fill="right", remove=FALSE) %>%
+    dplyr::mutate(scalefactor=ifelse(is.na(scalefactor), 0, scalefactor))
+  sf = as.numeric(fdat$scalefactor)
+  posa = as.numeric(counts["Positive_POS_A_ERCC_00117.1",])
+  scales = t(replicate(length(sf), posa))
+  scales = scales * sf
+  scaled = counts - scales
+  scaled[scaled<0] = 0
+  rownames(scaled) = fdat$Name
+  return(round(scaled))
+}
+
+plot_corrected_miRNA = function(scaled, counts) {
+  require(reshape)
+  require(ggplot2)
+  rownames(counts) = rownames(scaled)
+  is_scaled = rowSums(abs(counts - scaled)) > 0
+  counts = melt(as.matrix(counts[is_scaled,]))
+  colnames(counts) = c("gene", "sample", "value")
+  counts$scaled = "no"
+  scaled = melt(as.matrix(scaled[is_scaled,]))
+  colnames(scaled) = c("gene", "sample", "value")
+  scaled$scaled = "yes"
+  all = rbind(counts, scaled)
+  library(cowplot)
+  ggplot(all, aes(sample, value, color=scaled)) + facet_wrap(~gene) +
+    geom_point(size=0.5) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+    guides(colour = guide_legend(override.aes = list(size=6))) + ylab("") +
+    ggtitle("miRNA hybridization crosstalk correction")
+}
+```
+
+```{r scale-counts}
+scaled = correct_miRNA(eset)
+plot_corrected_miRNA(scaled, counts)
+```
+
+## Positive controls
+Positive controls look like some of them worked, and some of them didn't.
+
+```{r positive-controls}
+library(ggplot2)
+library(dplyr)
+library(cowplot)
 
 extract_pred = function(counts, predicate) {
   toplot = counts[predicate(rownames(counts)),] %>%
@@ -100,6 +164,9 @@ spotboxplot = function(toplot) {
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
 }
 spotbarplot(extract_pred(counts, is_positive))
+```
+
+```{r normalize-by-spikes}
 ```
 
 ## Negative controls
@@ -152,10 +219,15 @@ so different?
 table(subset(extract_pred(counts, is_housekeeping), count > 1000)$sample)
 ```
 
+## Normalization
+
 ## Drop non-negative control and housekeeping
 ```{r drop-unusable}
 keep = counts[!(is_spikein(rownames(counts)) | is_positive(rownames(counts)) |
                 is_housekeeping(rownames(counts)) | is_ligation(rownames(counts))),]
+keep = counts[, !grepl("Blank", colnames(counts))]
+metadata = subset(metadata, id %in% colnames(keep))
+counts = keep
 ```
 
 ## Drop genes below noise floor
@@ -189,7 +261,7 @@ This left us with `r nrow(keepgenes)` miRNA to consider out of the original
 ## Differential expression
 
 ```{r de-setup}
-dds = DESeqDataSetFromMatrix(counts[rownames(keepgenes),], colData=metadata,
+dds = DESeqDataSetFromMatrix(counts[rownames(keep),colnames(keep)], colData=metadata,
                              design=~column+spiked+line+hypoxia)
 dds = DESeq(dds, fitType='local')
 ```
