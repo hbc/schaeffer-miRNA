@@ -8,6 +8,8 @@ output:
     theme: flatly
 ---
 
+## Load data
+
 ```{r load-data}
 infn = "../data/Int Hypox Invitro and Human Meta Data.csv"
 metadata = read.table(infn, sep=",", header=TRUE, stringsAsFactors=FALSE)
@@ -42,6 +44,7 @@ metadata$id = as.character(paste(metadata$line, metadata$hypoxia, metadata$spike
                                  metadata$column, metadata$month, sep="_"))
 metadata$id = ifelse(grepl("Blank", metadata$id), metadata$Full.Sample.Name,
                      metadata$id)
+metadata$linehypo = paste(metadata$line, metadata$hypoxia, sep="_")
 ```
 
 Now we are ready to roll and can read in the RCC files using the sweet
@@ -134,8 +137,95 @@ scaled = correct_miRNA(eset)
 plot_corrected_miRNA(scaled, counts)
 ```
 
+## Imaging QC
+This percentage should be super high, close to 100%. If there isn't that usually means
+the cartridge needs to be rescanned. If it is < 3 weeks from the scan, rescanning
+should be okay. Nanostring folks call < 75% a failure.
+
+```{r imaging-qc}
+library(cowplot)
+pdat = pData(eset) %>% left_join(metadata, by=c("FileName"="RCC.FILE.NAME"))
+pdat$pcounted = pdat$FovCounted/pdat$FovCount * 100
+ggplot(pdat, aes(id, pcounted)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  scale_y_continuous(expand = c(0,0)) +
+  expand_limits(y = c(0,1.05 * max(pdat$pcounted))) +
+  ylab("percentage of FOV counted") + xlab("sample") +
+  geom_hline(yintercept=75, color="red")
+```
+
+## Binding density
+Nanostring folks call a sample problematic if the binding density is < 0.05 or
+> 2.25.
+
+```{r binding-density}
+ggplot(pdat, aes(id, BindingDensity)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  scale_y_continuous(expand = c(0,0)) +
+  expand_limits(y = c(0,1.05 * max(pdat$BindingDensity))) +
+  ylab("Binding density") + xlab("sample") +
+  geom_hline(yintercept=0.05, color="red") +
+  geom_hline(yintercept=2.25, color="red")
+```
+
 ## Positive controls
-Positive controls look like some of them worked, and some of them didn't.
+Below we look at the R^2 correlation between the expected positive
+control concentrations and the observed concentrations for each
+sample.
+
+```{r pos-r2}
+pcdf = data.frame(concentration=log2(c(128, 32, 8, 2, 0.5, 0.125)),
+                  GeneName=paste("POS", c("A", "B", "C", "D", "E", "F"), sep="_"))
+pccounts = subset(exprs(eset), grepl("Positive_POS", rownames(exprs(eset))))
+pccounts = pccounts[sort(rownames(pccounts)),]
+rownames(pccounts) = pcdf$GeneName
+corsamples = data.frame(correlation=apply(pccounts, 2,
+                                          function(x) cor(x, pcdf$concentration)),
+                        sample=colnames(pccounts)) %>%
+  left_join(metadata, by=c("sample"="RCC.FILE.NAME"))
+ggplot(corsamples, aes(sample, correlation)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  scale_y_continuous(expand = c(0,0)) +
+  expand_limits(y = c(0,1.05 * max(corsamples$correlation))) +
+  ylab("positive control correlation") +
+  xlab("positive control correlation")
+```
+
+## Ligation controls
+Here we look at R^2 for the ligation controls as well. It looks like a couple
+samples failed.
+
+```{r lig-r2}
+pcdf = data.frame(concentration=log2(c(128, 32, 8)),
+                  GeneName=paste("POS_", c("A", "B", "C"), sep="_"))
+pccounts = subset(exprs(eset), grepl("Ligation_LIG_POS", rownames(exprs(eset))))
+pccounts = pccounts[sort(rownames(pccounts)),]
+rownames(pccounts) = pcdf$GeneName
+corsamples = data.frame(correlation=apply(pccounts, 2,
+                                          function(x) cor(x, pcdf$concentration)),
+                        sample=colnames(pccounts)) %>%
+  left_join(metadata, by=c("sample"="RCC.FILE.NAME"))
+ggplot(corsamples, aes(sample, correlation)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  scale_y_continuous(expand = c(0,0)) +
+  expand_limits(y = c(0,1.05 * max(corsamples$correlation))) +
+  ylab("ligation control correlation") +
+  xlab("ligation control correlation")
+```
+
+```{r which-failed-ligation}
+subset(corsamples, correlation < 0.75)$sample
+```
+
+Ah, of course, the blanks.
 
 ```{r positive-controls}
 library(ggplot2)
@@ -166,9 +256,6 @@ spotboxplot = function(toplot) {
 spotbarplot(extract_pred(counts, is_positive))
 ```
 
-```{r normalize-by-spikes}
-```
-
 ## Negative controls
 Negative counts can be relatively high in some of the samples compared to
 the other samples.
@@ -177,8 +264,6 @@ the other samples.
 spotbarplot(extract_pred(counts, is_negative))
 ```
 
-It looks like all of those samples have something in common:
-
 ```{r high-negative}
 knitr::kable(subset(extract_pred(counts, is_negative), count > 50))
 ```
@@ -186,7 +271,7 @@ knitr::kable(subset(extract_pred(counts, is_negative), count > 50))
 Was anything different about those samples?
 
 ## SpikeIn
-It looks like there are some samples that have spike-ins
+It looks like there are only some samples that have spike-ins.
 ```{r spikein}
 spotbarplot(extract_pred(counts, is_spikein))
 ```
@@ -197,13 +282,34 @@ And those correspond to the spike-ins in the metadata:
 knitr::kable(subset(extract_pred(counts, is_spikein), count > 500))
 ```
 
-They are all from October and January though. Is the metadata not correct
-about the spike ins for these samples?
-
 ## Ligation
-Only some of the ligation controls show up
+It looks like some of the ligation controls worked better than the other.
+Kit suggested just normalizing by the mean of the posA ligation control.
+What we will do instead is do the normalization we usually do, but include
+the ligation efficiency for each sample as a factor in the regression.
+Then we can test whether or not our normalization scheme is correcting for
+the ligation efficiency. It should be, if the result of the ligation efficiency
+is overall less miRNA.
+
 ```{r ligation}
 spotbarplot(extract_pred(counts, is_ligation))
+```
+
+### Ligation efficiency
+
+Here we calculated ligation efficiency for the samples. This is the
+log of LIG_POS_A(i) / mean(LIG_POS_A) for each sample i. It doesn't matter
+which direction this is in, it will get corrected for in the model.
+
+```{r ligation_efficiency}
+lig_posa = as.numeric(counts[grepl("Ligation_LIG_POS_A", rownames(counts)),])
+metadata$lignorm = log2(lig_posa / mean(lig_posa))
+ggplot(subset(metadata, line != "Blank"), aes(id, lignorm)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  ylab("ligation factor") +
+  xlab("sample")
 ```
 
 ## Housekeeping
@@ -223,20 +329,22 @@ table(subset(extract_pred(counts, is_housekeeping), count > 1000)$sample)
 
 ## Drop non-negative control and housekeeping
 ```{r drop-unusable}
-keep = counts[!(is_spikein(rownames(counts)) | is_positive(rownames(counts)) |
-                is_housekeeping(rownames(counts)) | is_ligation(rownames(counts))),]
-keep = counts[, !grepl("Blank", colnames(counts))]
+drop = is_spikein(rownames(counts))
+drop = drop | is_positive(rownames(counts))
+drop = drop | is_housekeeping(rownames(counts))
+drop = drop | is_ligation(rownames(counts))
+keep = counts[!drop,]
+keep = keep[, !grepl("Blank", colnames(keep))]
 metadata = subset(metadata, id %in% colnames(keep))
 counts = keep
 ```
-
 ## Drop genes below noise floor
 We'll normalize the libraries and look at the negative control expression and
 then come up with a cutoff that is above the noise floor for the libraries.
 
 ```{r normalize-deseq2}
 library(DESeq2)
-dds = DESeqDataSetFromMatrix(keep, colData=metadata, design=~month+column+line+hypoxia)
+dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=~month+column+line+hypoxia+lignorm)
 dds = estimateSizeFactors(dds)
 ncounts = data.frame(counts(dds, normalized=TRUE))
 ```
@@ -252,25 +360,79 @@ We used the threshold of 30 as the noise floor and dropped all" miRNA that did
 not have at least 30 counts in 20% of the samples.
 
 ```{r drop-mirna}
-keepgenes = ncounts[rowSums(ncounts > 30) > 0.2*ncol(ncounts),]
+keepgenes = rowSums(ncounts > 30) > 0.2*ncol(ncounts)
+counts = counts[keepgenes,]
 ```
 
-This left us with `r nrow(keepgenes)` miRNA to consider out of the original
-`r nrow(ncounts)`.
+## Does normalization for ligation effiency buy us anything?
+Here we fit two models. The first model we fit the full model,
+including the ligation normalization term in the model.
+~month+column+line+hypoxia+lignorm. Then we fit a reduced model without
+the lignorm term to answer the question 'is there miRNA that are affected by the
+ligation efficiency?'
 
-## Differential expression
+Yes, it looks like even after normalization, if we fit a model with just
+the ligation efficiency that there are miRNA affected. So we should correct
+for that. Here you can see only a subset of the miRNA are affected; if we
+do it like this instead of just scaling the counts, we can correct for
+the specific miRNA that have counts that are correlated with the ligation
+efficiency.
+
+```{r liga}
+dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=~month+column+line+hypoxia+lignorm)
+dds = DESeq(dds, full=~month+column+line+hypoxia+lignorm,
+            reduced=~month+column+line+hypoxia,  test="LRT")
+res = results(dds)
+plotMA(res)
+res = data.frame(res) %>% tibble::rownames_to_column() %>%
+  arrange(padj) %>% filter(padj < 0.05)
+knitr::kable(subset(res, padj < 0.05))
+```
+
+
+## PCA
+Here we do PCA to look at how the samples cluster. We can see a clear separation
+along the 1st and 2nd PCA based on line, but within a cell line, the different
+hypoxic states overlap.
 
 ```{r de-setup}
-dds = DESeqDataSetFromMatrix(counts[rownames(keep),colnames(keep)], colData=metadata,
-                             design=~column+spiked+line+hypoxia)
-dds = DESeq(dds, fitType='local')
+dds = DESeqDataSetFromMatrix(counts, colData=metadata,
+                             design=~column+spiked+line+hypoxia+lignorm)
+vst = varianceStabilizingTransformation(dds)
+pca_loadings = function(object, ntop=500) {
+  rv <- matrixStats::rowVars(assay(object))
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop,
+      length(rv)))]
+  pca <- prcomp(t(assay(object)[select, ]))
+  percentVar <- pca$sdev^2/sum(pca$sdev^2)
+  names(percentVar) = colnames(pca$x)
+  pca$percentVar = percentVar
+  return(pca)}
+pc = pca_loadings(vst)
+comps = data.frame(pc$x)
+comps$Name = rownames(comps)
+library(dplyr)
+comps = comps %>% left_join(metadata, by=c("Name"="id"))
+pca_plot = function(comps, nc1, nc2, colorby) {
+   c1str = paste0("PC", nc1)
+   c2str = paste0("PC", nc2)
+  ggplot(comps, aes_string(c1str, c2str, color=colorby)) +
+    geom_point() + theme_bw() +
+    xlab(paste0(c1str, ": ", round(pc$percentVar[nc1] * 100), "% variance")) +
+    ylab(paste0(c2str, ": ", round(pc$percentVar[nc2] * 100), "% variance"))
+  }
+pca_plot(comps, 1, 2, "linehypo")
+pca_plot(comps, 3, 4, "linehypo")
 ```
+
+## Differential expression
 
 Nanostring data has an opposite mean-variance relationship than RNA-seq data.
 Here the dispersion is slightly higher for more highly expressed miRNA-- the
 the trend is mostly flat, however.
 
 ```{r mirna-dispersion}
+dds = DESeq(dds, fitType='local')
 plotDispEsts(dds)
 ```
 
@@ -321,8 +483,8 @@ states within each cell line.
 
 ```{r refit-model}
 metadata$linehypo = paste(metadata$line, metadata$hypoxia, sep="_")
-dds = DESeqDataSetFromMatrix(counts[rownames(keepgenes),], colData=metadata,
-                             design=~column+spiked+linehypo)
+dds = DESeqDataSetFromMatrix(counts, colData=metadata,
+                             design=~column+spiked+linehypo+lignorm)
 dds = DESeq(dds, fitType='local')
 ```
 
@@ -386,10 +548,29 @@ ggplot(data.frame(res), aes(log2FoldChange, lfcMLE/lfcSE)) + geom_point() +
 write_results(res, "U937_IHvsSH.csv")
 ```
 
-# Prior miRNA
+## Prior miRNA
 miR-210 is below the noise floor-- one of the miR-365 spots though has
 higher expression values.
 ```{r plot-prior}
 spotbarplot(extract_pred(counts, is_prior)) + scale_y_log10()
 spotboxplot(extract_pred(counts, is_prior))
 ```
+
+## Ouput tables
+[Huh7 NO vs IH](Huh7_NOvsIH.csv)
+
+[Huh7 SO vs IH](Huh7_SOvsIH.csv)
+
+[Huh7 IH vs SH](Huh7_IHvsSH.csv)
+
+[THP NO vs IH](THP_NOvsIH.csv)
+
+[THP SO vs IH](THP_SOvsIH.csv)
+
+[THP IH vs SH](THP_IHvsSH.csv)
+
+[U937 NO vs IH](U937_NOvsIH.csv)
+
+[U937 SO vs IH](U937_SOvsIH.csv)
+
+[U937 IH vs SH](U937_IHvsSH.csv)
