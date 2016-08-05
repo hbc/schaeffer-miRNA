@@ -430,3 +430,10 @@ res = results(dds, contrast=c("condition", "SS", "HC"))
 plotMA(res)
 write_results(res, "SS-vs-HC.csv")
 ```
+
+## Output tables
+[OSA vs HC](OSA-vs-HC.csv)
+
+[OSA vs SS](OSA-vs-SS.csv)
+
+[SS vs HC](SS-vs-HC.csv)
