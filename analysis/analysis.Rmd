@@ -172,6 +172,24 @@ ggplot(pdat, aes(id, BindingDensity)) + geom_point() +
   geom_hline(yintercept=2.25, color="red")
 ```
 
+## Total counts vs miRNA detected
+Here I plotted the total counts vs the number of miRNA detected, where
+detected is it has counts > 30. There is a pretty big spread among the samples
+in terms of the miRNA detected. The Huh7 cells look like they have a lower
+number of genes detected on average for a given number of reads. This
+might be a technical artifact or it could also be that there are less miRNA
+in the Huh7 cells.
+
+```{r complexity-plot}
+endocounts = counts[grepl("Endo", rownames(counts)),]
+cdf = data.frame(total=colSums(counts), detected=colSums(counts > 30))
+rownames(cdf) = colnames(counts)
+cdf$id = rownames(cdf)
+cdf = cdf %>% left_join(metadata, by="id")
+ggplot(cdf, aes(total, detected, color=column, label=linehypo)) +
+  geom_text() + scale_x_log10()
+```
+
 ## Positive controls
 Below we look at the R^2 correlation between the expected positive
 control concentrations and the observed concentrations for each
