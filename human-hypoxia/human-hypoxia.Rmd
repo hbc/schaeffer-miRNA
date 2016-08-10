@@ -21,6 +21,7 @@ metadata$spiked = ifelse(grepl("Spike", metadata$Spike.In), "spike", "nospike")
 metadata$column = ifelse(grepl("ymo", metadata$Column), "zymo",
                   ifelse(grepl("None", metadata$Column), "none", "other"))
 metadata$id = paste(metadata$Full.Sample.Name, metadata$column, metadata$spiked, metadata$condition, sep="_")
+set.seed(12345)
 ```
 
 ```{r load-files}
@@ -301,8 +302,13 @@ which direction this is in, it will get corrected for in the model. Again
 we can see most of the Zymo columns are outliers in this.
 
 ```{r ligation-efficiency}
-lig_posa = as.numeric(counts[grepl("Ligation_LIG_POS_A", rownames(counts)),])
-metadata$lignorm = log2(lig_posa / mean(lig_posa))
+lignorm = function(counts, feature="Ligation_LIG_POS_A") {
+  ligcounts = as.numeric(counts[grepl(feature, rownames(counts)),])
+  lnorm = log2((ligcounts + 1) / mean(ligcounts))
+  names(lnorm) = colnames(counts)
+  return(lnorm)
+}
+metadata$lignorm = lignorm(counts)
 ggplot(metadata, aes(id, lignorm, color=column)) + geom_point() +
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank(),
@@ -437,3 +443,118 @@ write_results(res, "SS-vs-HC.csv")
 [OSA vs SS](OSA-vs-SS.csv)
 
 [SS vs HC](SS-vs-HC.csv)
+
+## 5-11-16 only
+The 5-11-16 samples are all Zymo columns, all have spike-ins and are two
+conditions. This is the cleanest set to look at. We'll subset the data down to
+these samples and run the analysis. Since these are all spike-ins we can also
+normalize by the spike in data. We'll renormalize the ligation data as well.
+
+```{r may-subset}
+scaled = correct_miRNA(eset)
+counts = as.data.frame(scaled)
+colnames(counts) = metadata$id
+maymeta = subset(metadata, Date.Shipped == "5.11.16")
+maycounts = counts[, maymeta$id]
+maymeta$lignorm = lignorm(maycounts)
+```
+
+### Spike-in normalization
+Here we will calculate normalization values using the formula suggested by the
+NanoString folks with the spikeins. We calculate the geometric of all of the spike
+ins and divide that by the average of the geometric mean
+
+```{r spike-normalize}
+colGeo = function(mat) {
+  lmat = log2(mat + 1)
+  return(colMeans(lmat))
+}
+spikenormalize = function(counts) {
+  counts = counts[is_spikein(rownames(counts)),]
+  geo = colGeo(counts)
+  return(mean(geo) / geo)
+}
+maymeta$spikenorm = spikenormalize(maycounts)
+```
+
+### Run DESeq2
+```{r deseq2-may}
+deseq2resids = function(dds) {
+  fitted = t(t(assays(dds)[["mu"]]) / sizeFactors(dds))
+  return(counts(dds, normalized=TRUE) - fitted)
+}
+
+design = ~condition
+maycounts = drop_unusable(maycounts)
+dds = DESeqDataSetFromMatrix(maycounts, colData=maymeta, design=design)
+dds = DESeq(dds, fitType='local')
+maymeta$sizefactor = sizeFactors(dds)
+resdnorm = results(dds)
+```
+
+### Spike-in vs DESeq2 style normalization
+DESeq2 has a similar normalization scheme to the spike-ins but instead uses
+all of the genes, not just the spike-ins. For each gene a scaling factor is
+created and the median of those scaling factors for each sample is the
+sizeFactor. How does this compare to just using the spike-ins?
+
+```{r deseq2-sizefactors}
+ggplot(maymeta, aes(sizefactor, spikenorm)) +
+  geom_point() +
+  xlab("DESeq2 normalization") +
+  ylab("Spike-in normalization")
+```
+
+Not great! We'll manually set the size factor for these libraries, then.
+
+```{r deseq-may-with-spikenorms}
+dds = DESeqDataSetFromMatrix(maycounts, colData=maymeta, design=design)
+sizeFactors(dds) = maymeta$spikenorm
+dds = DESeq(dds, fitType='local')
+ressnorm = results(dds)
+```
+
+How did that affect the results? It doesn't seem to affect them much,
+plotting the p-values and log2 fold changes against each other:
+
+```{r deseq2-norm-comparison}
+qplot(resdnorm$pvalue, ressnorm$pvalue) + geom_point() +
+  xlab("DESeq2 normalization p-value") + ylab("Spike-in normalization p-value")
+qplot(resdnorm$log2FoldChange, ressnorm$log2FoldChange) + geom_point() +
+  xlab("DESeq2 normalization log2FC") + ylab("Spike-in normalization log2FC")
+```
+
+But, overall, the size factors were within 10% of each other for all of the
+samples, so it isn't surprising that shifting them doesn't affect the results
+much. We'll use the results from the NanoString normalization though.
+
+```{r deseq2-may-results}
+res = results(dds, contrast=c("condition", "OSA", "SS"))
+plotMA(res)
+write_results(res, "may-OSA-vs-SS.csv")
+```
+
+[May OSA-vs-SS](may-OSA-vs-SS.csv)
+
+Again, we're not seeing much here. Nothing pops out as significant; I think
+to do this we need many more samples.
+
+### PCA for May samples
+
+Even looking at some of the higher order PCA components, we're not seeing
+any convincing separation.
+
+```{r may-pca-plot}
+vst = varianceStabilizingTransformation(dds)
+pc = pca_loadings(vst)
+comps = data.frame(pc$x)
+comps$Name = rownames(comps)
+comps = comps %>% left_join(maymeta, by=c("Name"="id"))
+pca_plot(comps, 1, 2, "condition")
+pca_plot(comps, 3, 4, "condition")
+pca_plot(comps, 5, 6, "condition")
+```
+
+With more samples, and more metadata about the samples, we could maybe dive into
+what might be causing the increased variation, but without that we're mostly
+sunk.
