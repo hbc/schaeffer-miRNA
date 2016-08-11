@@ -484,12 +484,12 @@ deseq2resids = function(dds) {
   return(counts(dds, normalized=TRUE) - fitted)
 }
 
-design = ~condition
+design = ~lignorm+condition
 maycounts = drop_unusable(maycounts)
 dds = DESeqDataSetFromMatrix(maycounts, colData=maymeta, design=design)
 dds = DESeq(dds, fitType='local')
 maymeta$sizefactor = sizeFactors(dds)
-resdnorm = results(dds)
+resdnorm = results(dds, addMLE=TRUE)
 ```
 
 ### Spike-in vs DESeq2 style normalization
@@ -511,7 +511,7 @@ Not great! We'll manually set the size factor for these libraries, then.
 dds = DESeqDataSetFromMatrix(maycounts, colData=maymeta, design=design)
 sizeFactors(dds) = maymeta$spikenorm
 dds = DESeq(dds, fitType='local')
-ressnorm = results(dds)
+ressnorm = results(dds, addMLE=TRUE)
 ```
 
 How did that affect the results? It doesn't seem to affect them much,
@@ -529,7 +529,7 @@ samples, so it isn't surprising that shifting them doesn't affect the results
 much. We'll use the results from the NanoString normalization though.
 
 ```{r deseq2-may-results}
-res = results(dds, contrast=c("condition", "OSA", "SS"))
+res = results(dds, contrast=c("condition", "OSA", "SS"), addMLE=TRUE)
 plotMA(res)
 write_results(res, "may-OSA-vs-SS.csv")
 ```
