@@ -1,0 +1,29 @@
+File Name,FULL RCC File Name,Pure Sample Name ,Full Sample Name,Clinical Category,What,Column,Spike In,Notes,Date Shipped ,RCC File Date
+20150421_PHS 1_01_01.RCC,20150421_PHS 1_01_01.RCC,T1,T1N,Healthy Control,Healthy control 1 -vial 1,Norgen column,None,optimization,4.6.15,4.21.2015
+É02,20150421_PHS 1_01_02.RCC,T1,TINA,Healthy Control,Healthy control 1 -vial 1,Norgen/Amicon,None,optimization,4.6.15,4.21.2015
+..03,20150421_PHS 1_01_03.RCC,T1,T1N,Healthy Control,Healthy control 1 -vial 1,None,None,optimization,4.6.15,4.21.2015
+..04,20150421_PHS 1_01_04.RCC,T1,T1A,Healthy Control,Healthy control 1 -vial 1,Amicon,None,optimization,4.6.15,4.21.2015
+É05,20150421_PHS 1_01_05.RCC,Y2,Y2,Healthy Control,Healthy control 2,None,None,optimization,4.6.15,4.21.2015
+É06,20150421_PHS 1_01_06.RCC,Y2,Y2A,Healthy Control,Healthy control 2,Amicon,None,optimization,4.6.15,4.21.2015
+É08,20150421_PHS 1_01_08.RCC,72,72,NAFLD,NAFLD control 1,None,None,optimization,4.6.15,4.21.2015
+É09,20150421_PHS 1_01_09.RCC,72,72A,NAFLD,NAFLD control 1,Amicon,None,optimization,4.6.15,4.21.2015
+179ON,20160602_ES052616miRNAV3aC2_1790N_03.RCC,179ON,179ON,OSA/NASH,OSA/NASH 1,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+258ON,20160602_ES052616miRNAV3aC2_2580N_04.RCC,258ON,258ON,OSA/NASH,OSA/NASH 2,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+035ON,20160602_ES052616miRNAV3aC2_0350N_05.RCC,035ON,035ON,OSA/NASH,OSA/NASH 3,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+448ON,20160602_ES052616miRNAV3aC2_4480N_06.RCC,448ON,448ON,OSA/NASH,OSA/NASH 4,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+048SS,20160602_ES052616miRNAV3aC2_048SS_07.RCC,048SS,048SS,NoOSA/SS,No OSA / Simple Steatosis 1,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+037ss,20160602_ES052616miRNAV3aC2_037ss_08.RCC,037ss,037ss,NoOSA/SS,No OSA / Simple Steatosis 2,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+163SS,20160602_ES052616miRNAV3aC2_163SS_09.RCC,163SS,163SS,NoOSA/SS,No OSA / Simple Steatosis 3,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+114SS,20160602_ES052616miRNAV3aC2_114SS_10.RCC,114SS,114SS,NoOSA/SS,No OSA / Simple Steatosis 4,zymo,+Spike In,<100UL starting material,5.11.16,6.2.16
+20151118_Espy-11-18-15-rescan_01_01.RCC,20151118_Espy-11-18-15-rescan_01_01.RCC,T3,T3,Healthy Control,Healthy control 1 - vial 3,Regular,+Spike In,optimization,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_02.RCC,20151118_Espy-11-18-15-rescan_01_02.RCC,B9,B9,Healthy Control,Healthy control 3 - vial 9,Regular,+Spike In,optimization,10.28.15,11.15.15
+..03,20151118_Espy-11-18-15-rescan_01_03.RCC,BR13,BR13,Healthy Control,Healthy control 3 -vial 13,Regular,+Spike In,optimization,10.28.15,11.15.15
+..04,20151118_Espy-11-18-15-rescan_01_04.RCC,T5,T5,Healthy Control,Healthy Control 1 - vial 5,Regular,+Spike In,optimization,10.28.15,11.15.15
+..05,20151118_Espy-11-18-15-rescan_01_05.RCC,023SS,023SS,NoOSA/SS,No OSA/Simple Steatosis 5,Regular,None,optimization,10.28.15,11.15.15
+..06,20151118_Espy-11-18-15-rescan_01_06.RCC,O35ON,O35ON,OSA/NASH,OSA/NASH 5,Regular,None,optimization,10.28.15,11.15.15
+..07,20160114_ES011416miRNAV3a_Stock sampleA1_07.RCC,A1,A1,Healthy Control,Healthy control 4 - vial 1,None,+Spike In,optimization,1.4.16,1.14.16
+..08,20160114_ES011416miRNAV3a_Stock sampleA2O_08.RCC,A10,A10,Healthy Control,Healthy control 4 -vial 10,Zymo,+Spike In,optimization,1.4.16,1.14.16
+..09,20160114_ES011416miRNAV3a_Stock sampleA3R_09.RCC,A3R,A3R,Healthy Control,Healthy control 4 - vial 3,Oligo,+Spike In,optimization,1.4.16,1.14.16
+..10,20160114_ES011416miRNAV3a_Stock sampleB1_10.RCC,B1,B1,Healthy Control,Healthy Control 3 - vial 1,None,None,optimization,1.4.16,1.14.16
+..11,20160114_ES011416miRNAV3a_Stock sampleB20_11.RCC,B20,B20,Healthy Control,Healthy Control 3 - vial 29,Zymo,None,optimization,1.4.16,1.14.16
+..12,20160114_ES011416miRNAV3a_Stock sampleB3R_12.RCC,B3R,B3R,Healthy Control,Healthy Control 3 - vial 3,Regular,None,optimization,1.4.16,1.14.16

@@ -1,0 +1,51 @@
+RCC FILE NAME,Full Sample Name,Cell Line,Condition,What,Column,Spike In,Experiment Date,Replicate Number ,Date Shipped ,RCC File Date
+20150421_PHS 1_01_10.RCC,IH1,Huh 7,Intermittent Hypoxia,Huh 7 cells Int Hypox,None,No spike in ,1.8.15,H-1,4.6.15,4.21.2015
+20150421_PHS 1_01_11.RCC,N1 ,Huh 7,Normoxia,Huh7 Normox,None,No spike in ,1.8.15,H-1,4.6.15,4.21.2015
+20150421_PHS 1_01_12.RCC,SH1,Huh 7,Sustained Hypoxia,Huh7 Sust Hypox,None,No spike in ,1.8.15,H-1,4.6.15,4.21.2015
+20151118_Espy-11-18-15-rescan_01_07.RCC,UN ,U937,Normoxia,U937 Normox,None,+ Spike In,10.27.15,U-1,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_08.RCC,UIH,U937,Intermittent Hypoxia,U937 Int Hypox,None,+ Spike In,10.27.15,U-1,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_09.RCC,USH,U937,Sustained Hypoxia,U937 Sust Hypx,None,+ Spike In,10.27.15,U-1,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_10.RCC,H7N,Huh 7,Normoxia,Huh 7 Normox,None,+ Spike In,10.27.15,H-2,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_11.RCC,H7IH,Huh 7,Intermittent Hypoxia,Huh 7 Int Hypox,None,+ Spike In,10.27.15,H-2,10.28.15,11.15.15
+20151118_Espy-11-18-15-rescan_01_12.RCC,H7SH,Huh 7,Sustained Hypoxia,Huh 7 Sust hypox,None,+ Spike In,10.27.15,H-2,10.28.15,11.15.15
+20160114_ES011416miRNAV3a_U937 N_01.RCC,UN,U937,Normoxia,U937 Normox,None,+ Spike In,1.3.16,U-2,1.4.16,1.20.16
+20160114_ES011416miRNAV3a_U937 IH_02.RCC,UIH,U937,Intermittent Hypoxia,U937 Int Hypox,None ,+ Spike In,1.3.16,U-2,1.4.16,1.20.16
+20160114_ES011416miRNAV3a_U937 SH_03.RCC,USH,U937,Sustained Hypoxia,U937 Sust Hypx,None,+ Spike In,1.3.16,U-2,1.4.16,1.20.16
+20160114_ES011416miRNAV3a_H7 Nor5m_04.RCC,HN9,Huh 7,Normoxia,Huh 7 Normox,Oligo,+ Spike In,1.3.16,H-3,1.4.16,1.20.16
+20160114_ES011416miRNAV3a_H7 IH_05.RCC,HIHO,Huh 7,Intermittent Hypoxia,Huh 7 Int Hypox,Oligo,None,1.3.16,H-3,1.4.16,1.20.16
+20160114_ES011416miRNAV3a_H7 SH_06.RCC,HSHR,Huh 7,Sustained Hypoxia,Huh 7 Sust hypox,Regular ,+Spike IN ,1.3.16,H-3,1.4.16,1.20.16
+20160606_ES060616miRNAV3aC1_4H7N_01.RCC,4H7N,Huh 7,Normoxia,April H7 N,None,No spike in ,4.29.16,H-4,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_4H7H_02.RCC,4H7IH,Huh 7,Intermittent Hypoxia,Apri H7 IH,None,No spike in ,4.29.16,H-4,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_4HSH_03.RCC,4H7SH,Huh 7,Sustained Hypoxia,April H7 SH,None,No spike in ,4.29.16,H-4,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_4UN_04.RCC,4UN,U937,Normoxia,April U937 Normox,None,No spike in ,4.29.16,U-3,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_4UIH_05.RCC,4UIH,U937,Intermittent Hypoxia,April U937 IH,None,No spike in ,4.29.16,U-3,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_4USH_06.RCC,4USH,U937,Sustained Hypoxia,April U937 SH,None,No spike in ,4.29.16,U-3,5.13.16,6.6.16
+20160708_ES070816miRNAV3aC3_7TN_01.RCC,7TN,THP,Normoxia,July THP Norm,None,No spike in ,7.21.15,T-1,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_7TIH_02.RCC,7TIH,THP,Intermittent Hypoxia,July THP IH,None,No spike in ,7.21.15,T-1,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_7TSH_03.RCC,7TSH,THP,Sustained Hypoxia,July THP SH,None,No spike in ,7.21.15,T-1,5.13.16,7.8.16
+20160608_ES060816miRNAV3aC2_12TN_03.RCC,12TN,THP,Normoxia,December THP Norm,None,No spike in ,12.1.15,T-2,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_12TIH_02.RCC,12TIH,THP,Intermittent Hypoxia,December THP IH,None,No spike in ,12.1.15,T-2,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_12TSH_01.RCC,12TSH,THP,Sustained Hypoxia,December THP SH,None,No spike in ,12.1.15,T-2,5.13.16,6.8.16
+20160606_ES060616miRNAV3aC1_12HN_09.RCC,12H7N,Huh 7,Normoxia,Dec H7 Norm,None,No spike in ,12.1.15,H-5,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_12HIH_11.RCC,12HIH,Huh 7,Intermittent Hypoxia,Dec H7 IH,None,No spike in ,12.1.15,H-5,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_12HSH_12.RCC,12HSH,Huh 7,Sustained Hypoxia,Dec H7 SH,None,No spike in ,12.1.15,H-5,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_5HN_10.RCC,5H7N,Huh 7,Normoxia,May H7 Normox,None,No spike in ,5.11.15,H-6,5.13.16,6.6.16
+20160608_ES060816miRNAV3aC2_5HIH_12.RCC,5HIH,Huh 7,Intermittent Hypoxia,May H7 IH,None,No spike in ,5.11.15,H-6,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_5HSH_11.RCC,5HSH,Huh 7,Sustained Hypoxia,May H7 SH,None,No spike in ,5.11.15,H-6,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_8TN_08.RCC,8TN,THP,Normoxia,August THP Normox,None,No spike in ,8.11.15,T-3,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_8TIH_09.RCC,8TIH,THP,Intermittent Hypoxia,August THP IH,None,No spike in ,8.11.15,T-3,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_8TSH_10.RCC,8TSH,THP,Sustained Hypoxia,August THP SH,None,No spike in ,8.11.15,T-3,5.13.16,6.8.16
+20160708_ES070816miRNAV3aC3_8UN_04.RCC,8UN,U937,Normoxia,August U937 Norm,None,No spike in ,8.11.15,U-4,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_8UIH_05.RCC,8UIH,U937,Intermittent Hypoxia,August U937 IH,None,No spike in ,8.11.15,U-4,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_8USH_06.RCC,8USH,U937,Sustained Hypoxia,August U937 SH,None,No spike in ,8.11.15,U-4,5.13.16,7.8.16
+20160608_ES060816miRNAV3aC2_11UN_05.RCC,11UN,U937,Normoxia,November U937 Norm,None,No spike in ,11.5.15,U-5,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_11UIH_06.RCC,11UIH,U937,Intermittent Hypoxia,November U937 IH,None,No spike in ,11.5.15,U-5,5.13.16,6.8.16
+20160608_ES060816miRNAV3aC2_11USH_07.RCC,11USH,U937,Sustained Hypoxia,November U937 SH,None,No spike in ,11.5.15,U-5,5.13.16,6.8.16
+20160708_ES070816miRNAV3aC3_7UN_07.RCC,7UN,U937,Normoxia,July U937 Norm,None,No spike in ,7.21.15,U-6,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_7UIH_08.RCC,7UIH,U937,Intermittent Hypoxia,July U937 IH,None,No spike in ,7.21.15,U-6,5.13.16,7.8.16
+20160708_ES070816miRNAV3aC3_7USH_09.RCC,7USH,U937,Sustained Hypoxia,July U937 SH,None,No spike in ,7.21.15,U-6,5.13.16,7.8.16
+20160606_ES060616miRNAV3aC1_9TN_07.RCC,9TN,THP,Normoxia,Sept THP Normox,None,No spike in ,9.25.15,T-4,5.13.16,6.6.16
+20160606_ES060616miRNAV3aC1_9TIH_08.RCC,9TIH,THP,Intermittent Hypoxia,Sept THP IH,None,No spike in ,9.25.15,T-4,5.13.16,6.6.16
+20160608_ES060816miRNAV3aC2_9TSH_04.RCC,9TSH,THP,Sustained Hypoxia,Sept THP SH,None,No spike in ,9.25.15,T-4,5.13.16,6.8.16
+20160602_ES052616miRNAV3aC2_Blank_11.RCC,Blank1,Blank,Blank1,Blank1,Blank1,,,,,,
+20160602_ES052616miRNAV3aC2_Blank_12.RCC,Blank2,Blank,Blank2,Blank2,Blank2,Blank2,,,,,
