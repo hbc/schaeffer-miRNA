@@ -1,0 +1,585 @@
+---
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    highlight: zenburn
+    theme: flatly
+---
+
+```{r load-data}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(cowplot)
+library(NanoStringQCPro)
+infn = "../data/metadata-hepb.csv"
+metadata = read_csv(infn)
+```
+
+The metadata file needs some cleaning up so we'll do that here. First
+we'll remove spaces and drop columns with no meaning.
+
+```{r metadata-rename-and-drop}
+cnames = c("rownumber", "sample", "filename", "diseaseclass", "month", "plate_sample",
+           "spikein", "extract_date", "extractor", "comments", "ship_date",
+           "file_date", "empty")
+colnames(metadata) = cnames
+metadata = metadata %>% select(-empty, -rownumber)
+metadata$diseaseclass = as.factor(metadata$diseaseclass)
+```
+
+Samplenames and metadata look unique:
+
+```{r check-columns}
+nrow(metadata) == length(unique(metadata$sample))
+nrow(metadata) == length(unique(metadata$filename))
+```
+
+```{r diseaseclass}
+class = as.factor(c(1,2,3,4,5,6,7))
+phenotype = c("acute", "positive_tolerant", "positive_active",
+              "negative_inactive", "negative_chronic",
+              "negative_unknown", "spontaneous")
+active = c("active", "inactive", "active", "inactive", "active",
+           "unknown", "inactive")
+classdata = data.frame(diseaseclass=class, phenotype=phenotype, active=active)
+metadata = metadata %>% left_join(classdata, by="diseaseclass")
+metadata$es = grepl("ES", metadata$extractor)
+metadata$cm = grepl("CM", metadata$extractor)
+metadata$ed = grepl("ED", metadata$extractor)
+metadata$zymo = grepl("zymo", metadata$extractor)
+metadata$active = ifelse(metadata$diseaseclass %in% c(1,3,5), "active",
+                         "inactive")
+metadata$active = ifelse(metadata$diseaseclass %in% c(1,3,5), "active",
+                         "inactive")
+```
+
+## Load data
+
+```{r load-files}
+rccFiles = paste("../data/rcc/", metadata$filename, sep="")
+eset = newRccSet(rccFiles=rccFiles)
+colnames(eset) = metadata$sample
+```
+
+## Scale miRNA with known crosstalk
+A small set of miRNA have known inflated values; Nanostring has a heuristic to
+correct for the inflation via the formula using some supplied constants. Here
+we implement that fix to correct the expression of those miRNA.
+
+```{r add-scaledata}
+plot_corrected_miRNA = function(scaled, eset) {
+  require(reshape)
+  require(ggplot2)
+  counts = exprs(eset)
+  rownames(counts) = rownames(scaled)
+  is_scaled = rowSums(abs(counts - scaled)) > 0
+  counts = melt(as.matrix(counts[is_scaled,]))
+  colnames(counts) = c("gene", "sample", "value")
+  counts$scaled = "no"
+  scaled = melt(as.matrix(scaled[is_scaled,]))
+  colnames(scaled) = c("gene", "sample", "value")
+  scaled$scaled = "yes"
+  all = rbind(counts, scaled)
+  library(cowplot)
+  ggplot(all, aes(sample, value, color=scaled)) +
+    facet_wrap(~gene, scale="free_y") +
+    scale_y_sqrt() +
+    geom_point(size=0.5) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+    guides(colour = guide_legend(override.aes = list(size=6))) + ylab("") +
+    ggtitle("miRNA hybridization crosstalk correction")
+}
+
+correct_miRNA = function(eset, plot=TRUE) {
+  # scales specific features tagged known to have crosstalk by
+  # the Nanostring provided scaling factor
+  require(dplyr)
+  fdat = fData(eset)
+  fdat = fdat %>%
+    tidyr::separate(GeneName, c("Name", "scalefactor"), sep='\\|',
+                    fill="right", remove=FALSE) %>%
+    dplyr::mutate(scalefactor=ifelse(is.na(scalefactor), 0, scalefactor))
+  sf = as.numeric(fdat$scalefactor)
+  posa = as.numeric(exprs(eset)["Positive_POS_A_ERCC_00117.1",])
+  scales = t(replicate(length(sf), posa))
+  scales = scales * sf
+  scaled = exprs(eset) - scales
+  scaled[scaled<0] = 0
+  print(plot_corrected_miRNA(scaled, eset))
+  exprs(eset) = round(scaled)
+  return(eset)
+}
+```
+
+```{r scale-counts}
+eset = correct_miRNA(eset)
+```
+
+## Imaging QC
+This percentage should be super high, close to 100%. If there isn't that usually means
+the cartridge needs to be rescanned. If it is < 3 weeks from the scan, rescanning
+should be okay. Nanostring folks call < 75% a failure. These all look fine.
+
+```{r imaging-qc}
+plotFOV = function(eset, metadata) {
+  pdat = pData(eset) %>%
+    tibble::rownames_to_column() %>%
+    left_join(metadata, by=c("rowname"="sample"))
+  pdat$pcounted = pdat$FovCounted/pdat$FovCount * 100
+  ggplot(pdat, aes(rowname, pcounted)) + geom_point() +
+      theme(axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x=element_text(size=8)) +
+    scale_y_continuous(expand = c(0,0)) +
+    expand_limits(y = c(0,1.05 * max(pdat$pcounted))) +
+    ylab("percentage of FOV counted") + xlab("sample") +
+    geom_hline(yintercept=75, color="red")
+}
+plotFOV(eset, metadata)
+```
+
+## Binding density
+Binding density looks ok.
+```{r binding-density}
+plotBD = function(eset, metadata) {
+  pdat = pData(eset) %>%
+    tibble::rownames_to_column() %>%
+    left_join(metadata, by=c("rowname"="sample"))
+  pdat$pcounted = pdat$FovCounted/pdat$FovCount * 100
+  ggplot(pdat, aes(rowname, BindingDensity)) + geom_point() +
+      theme(axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x=element_text(size=8)) +
+    scale_y_continuous(expand = c(0,0)) +
+    expand_limits(y = c(0,1.05 * max(pdat$BindingDensity))) +
+    ylab("Binding density") + xlab("sample") +
+    geom_hline(yintercept=0.05, color="red") +
+    geom_hline(yintercept=2.25, color="red")
+}
+plotBD(eset, metadata)
+```
+
+## Total counts vs miRNA detected
+Here I plotted the total counts vs the number of miRNA detected, where
+detected is it has counts > 30. There is a pretty big spread among the samples
+in terms of the miRNA detected. The Zymo columns seem to all have a low number of
+miRNA detected overall and for a given total mber of counts, a smaller number
+of miRNA detected. This indicates the samples using the Zymo columns are less
+complex than the non-Zymo samples.
+
+```{r non-monthunts}
+plotComplexity = function(eset, metadata) {
+  counts = exprs(eset)
+  endocounts = counts[grepl("Endo", rownames(counts)),]
+  cdf = data.frame(total=colSums(counts), detected=colSums(counts > 10))
+  rownames(cdf) = colnames(counts)
+  cdf$sample = rownames(cdf)
+  cdf = cdf %>% left_join(metadata, by="sample")
+  ggplot(cdf, aes(total, detected, color=zymo, shape=es)) + geom_point()
+}
+plotComplexity(eset, metadata)
+```
+
+```{r positive}
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+is_positive = function(column) {
+  return(grepl("Pos", column))
+}
+is_negative = function(column) {
+  return(grepl("Neg", column))
+}
+is_spikein = function(column) {
+  return(grepl("Spike", column))
+}
+is_ligation = function(column) {
+  return(grepl("Ligati", column))
+}
+is_housekeeping = function(column) {
+  return(grepl("Housekee", column))
+}
+is_prior = function(column) {
+  return(grepl("miR-159", column) | grepl("miR-248", column) |
+         grepl("miR-254", column))
+}
+
+extract_pred = function(eset, predicate, counts=FALSE) {
+  if(!counts) {
+    counts = data.frame(exprs(eset))
+  } else {
+    counts = eset
+    }
+  toplot = counts[predicate(rownames(counts)),] %>%
+    tibble::rownames_to_column() %>%
+    tidyr::gather("sample", "count", -rowname)
+  colnames(toplot) = c("spot", "sample", "count")
+  toplot = toplot %>% left_join(metadata, by="sample")
+  return(toplot)
+}
+spotbarplot = function(toplot) {
+  ggplot(toplot,
+        aes(sample, count)) + geom_bar(stat='identity') +
+    facet_wrap(~spot) +
+    theme(axis.text.x = element_blank(),
+          text = element_text(size=8))
+}
+spotboxplot = function(toplot) {
+  ggplot(toplot,
+        aes(linehypo, count)) + geom_boxplot() +
+    facet_wrap(~spot) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+}
+```
+
+## Positive controls
+Below we look at the R^2 correlation between the expected positive
+control concentrations and the observed concentrations for each
+sample.
+
+A set of samples have a lower correlation than the other samples.
+
+```{r posbarplot}
+spotbarplot(extract_pred(eset, is_positive))
+```
+
+```{r pos-2}
+posR2 = function(eset) {
+  pcdf = data.frame(concentration=log2(c(128, 32, 8, 2, 0.5, 0.125)),
+                    GeneName=paste("POS", c("A", "B", "C", "D", "E", "F"), sep="_"))
+  pccounts = subset(exprs(eset), grepl("Positive_POS", rownames(exprs(eset))))
+  pccounts = pccounts[sort(rownames(pccounts)),]
+  rownames(pccounts) = pcdf$GeneName
+  corsamples = data.frame(correlation=apply(pccounts, 2,
+                                            function(x) cor(x, pcdf$concentration)),
+                          sample=colnames(pccounts)) %>%
+    left_join(metadata, by="sample")
+  ggplot(corsamples, aes(sample, correlation)) + geom_point() +
+      theme(axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x=element_text(size=8)) +
+    scale_y_continuous(expand = c(0,0)) +
+    expand_limits(y = c(0,1.05 * max(corsamples$correlation))) +
+    ylab("positive control correlation") +
+    xlab("sample")
+  return(corsamples)
+}
+corsamples = posR2(eset)
+```
+
+## Negative controls
+We can see some samples have a higher negative control count than the
+other samples.
+```{r negative-controls}
+spotbarplot(extract_pred(eset, is_negative))
+```
+
+```{r high-negative}
+knitr::kable(subset(extract_pred(eset, is_negative), count > 50))
+```
+## SpikeIn
+We have two different sets of spike ins (OLD/NEW)? But they don't look much
+different from each other:
+
+```{r spikein}
+spotbarplot(extract_pred(eset, is_spikein))
+spikebarplot = function(toplot) {
+  ggplot(toplot,
+        aes(sample, count, fill=spikein)) + geom_bar(stat='identity') +
+    facet_wrap(~spot) +
+    theme(axis.text.x = element_blank(),
+          text = element_text(size=8))
+}
+```
+
+## Ligation
+
+```{r ligation}
+spotbarplot(extract_pred(eset, is_ligation))
+```
+
+## Ligation control R^2
+There are some samples with a pretty bad R2 for the ligation control. We will
+drop these.
+
+```{r ligation-r2}
+ligR2 = function(eset) {
+  pcdf = data.frame(concentration=log2(c(128, 32, 8)),
+                    GeneName=paste("POS_", c("A", "B", "C"), sep="_"))
+  pccounts = subset(exprs(eset), grepl("Ligation_LIG_POS", rownames(exprs(eset))))
+  pccounts = pccounts[sort(rownames(pccounts)),]
+  rownames(pccounts) = pcdf$GeneName
+  corsamples = data.frame(correlation=apply(pccounts, 2,
+                                            function(x) cor(x, pcdf$concentration)),
+                          sample=colnames(pccounts)) %>%
+    left_join(metadata, by="sample")
+  print(ggplot(corsamples, aes(sample, correlation)) + geom_point() +
+      theme(axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            strip.text.x=element_text(size=8)) +
+    scale_y_continuous(expand = c(0,0)) +
+    expand_limits(y = c(0,1.05 * max(corsamples$correlation))) +
+    ylab("ligation control correlation") +
+    xlab("sample"))
+  return(corsamples)
+}
+ligcor = ligR2(eset)
+dropsamples = subset(ligcor, correlation < 0.9)$sample
+```
+
+## Ligation efficiency
+Here we calculated ligation efficiency for the samples. This is the
+log of LIG_POS_A(i) / mean(LIG_POS_A) for each sample i. It doesn't matter
+which direction this is in, it will get corrected for in the model. Again
+we can see most of the Zymo columns are outliers in this.
+
+A small number of samples seem like the ligation step failed, so we can
+drop those from the analysis.
+
+```{r ligation-efficiency}
+lignorm = function(eset, feature="Ligation_LIG_POS_A") {
+  counts = exprs(eset)
+  ligcounts = as.numeric(counts[grepl(feature, rownames(counts)),])
+  lnorm = log2((ligcounts + 1) / mean(ligcounts))
+  names(lnorm) = colnames(counts)
+  return(lnorm)
+}
+metadata$lignorm = lignorm(eset)
+ggplot(metadata, aes(sample, lignorm)) + geom_point() +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          strip.text.x=element_text(size=8)) +
+  ylab("ligation factor") +
+  xlab("sample")
+dropsamples = unique(c(dropsamples, subset(metadata, lignorm < -2.5)$sample))
+```
+
+## Housekeeping
+Some housekeeping genes are expressed more highly in some samples. Not sure
+what we are supposed to do with this information, if there are any suggestions
+we could easily implement it.
+```{r housekeeping}
+spotbarplot(extract_pred(eset, is_housekeeping))
+```
+
+## Noise floor cutoff
+We'll normalize the libraries and look at the negative control expression and
+then come up with a cutoff that is above the noise floor for the libraries.
+It looks like 30 is a reasonable noise floor to use.
+
+```{r noise-floor}
+drop_unusable = function(counts) {
+  drop = is_spikein(rownames(counts))
+  drop = drop | is_positive(rownames(counts))
+  drop = drop | is_housekeeping(rownames(counts))
+  drop = drop | is_ligation(rownames(counts))
+  keep = counts[!drop,]
+  keep = keep[, !grepl("Blank", colnames(keep))]
+  return(keep)
+}
+library(DESeq2)
+dds = DESeqDataSetFromMatrix(drop_unusable(exprs(eset)), colData=metadata,
+                             design=~sample)
+dds = estimateSizeFactors(dds)
+ncounts = data.frame(counts(dds, normalized=TRUE))
+negcounts = extract_pred(ncounts, is_negative, counts=TRUE)
+ggplot(extract_pred(ncounts, is_negative, counts=TRUE), aes(count)) + geom_histogram()
+nfloor = 30
+```
+
+
+
+## Drop control miRNA and non-expressed miRNA
+```{r drop-control}
+filter_miRNA = function(counts) {
+  drop = is_spikein(rownames(counts))
+  drop = drop | is_positive(rownames(counts))
+  drop = drop | is_negative(rownames(counts))
+  drop = drop | is_housekeeping(rownames(counts))
+  drop = drop | is_ligation(rownames(counts))
+  drop = drop | (rowSums(counts > nfloor) < (0.2 * ncol(counts)))
+  keep = counts[!drop,]
+  keep = keep[, !grepl("Blank", colnames(keep))]
+  return(keep)}
+counts = exprs(eset)
+counts = filter_miRNA(counts)
+counts = counts[, ! colnames(counts) %in% dropsamples]
+metadata = subset(metadata, sample %in% colnames(counts))
+```
+
+## Is it okay to normalize by total library size?
+One of the things that came up was whether or not it is okay to normalize
+the counts by total library size. The idea was that in some experimental
+conditions, it might be that there are overall more miRNA expression than
+other conditions, and if we normalize by library size we will lose that information.
+
+If that is true, then we should expect to see different library sizes for
+different phenotypes. We test that here by calculating the library size for
+each phenotype and fitting a model of the library size dependent on phenotype.
+We see that the positive_tolerant samples have a higher library size, which
+might be indicative of more miRNA expression. So we can't just normalize
+by total library size, or else we will lose that information.
+
+```{r is-total-library-size-normalization-ok}
+cdf = data.frame(phenotype=metadata$phenotype, libsize=colSums(counts))
+cdf$phenotype = relevel(cdf$phenotype, ref="negative_inactive")
+fit = lm(libsize~phenotype, cdf)
+summary(fit)
+ggplot(cdf, aes(libsize)) + geom_histogram() + facet_wrap(~phenotype)
+```
+
+But there are clearly variations within a class of the library size, so
+we have to do something to normalize it.
+
+## Does normalization for ligation effiency buy us anything?
+Here we fit two models. The first model we fit the full model, including the
+ligation normalization term in the model. Then fit a reduced model without the
+lignorm term to answer the question 'are there miRNA that are affected by the
+ligation efficiency?'
+
+Some miRNA are affected by ligation efficiency more than others.
+
+Ligation efficiency affects the estimated expression level of highly expressed
+genes but has the opposite effect on more lowly expressed genes. Here we
+replace the normalization by library size in DESeq2 recalculate
+
+```{r liga}
+full = ~spikein+lignorm+phenotype
+reduced = ~spikein+phenotype
+dds = DESeqDataSetFromMatrix(counts, colData=metadata,
+                             design=full)
+sizeFactors(dds) = rep(1, ncol(counts))
+dds = DESeq(dds, full=full, reduced=reduced, test="LRT")
+res = results(dds)
+plotMA(res)
+res = data.frame(res) %>% tibble::rownames_to_column() %>%
+  arrange(padj) %>% filter(padj < 0.05)
+knitr::kable(subset(res, padj < 0.05))
+```
+
+## PCA
+
+It looks like maybe there is some separation along the second principal component
+for the samples labelled as positive vs the samples labelled as negative:
+
+```{r de-setup}
+dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=full)
+vst = varianceStabilizingTransformation(dds)
+pca_loadings = function(object, ntop=500) {
+  rv <- matrixStats::rowVars(assay(object))
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop,
+      length(rv)))]
+  pca <- prcomp(t(assay(object)[select, ]))
+  percentVar <- pca$sdev^2/sum(pca$sdev^2)
+  names(percentVar) = colnames(pca$x)
+  pca$percentVar = percentVar
+  return(pca)}
+pc = pca_loadings(vst)
+comps = data.frame(pc$x)
+comps$Name = rownames(comps)
+library(dplyr)
+comps = comps %>% left_join(metadata, by=c("Name"="sample"))
+pca_plot = function(comps, nc1, nc2, colorby) {
+   c1str = paste0("PC", nc1)
+   c2str = paste0("PC", nc2)
+  ggplot(comps, aes_string(c1str, c2str, color=colorby)) +
+    geom_point() + theme_bw() +
+    xlab(paste0(c1str, ": ", round(pc$percentVar[nc1] * 100), "% variance")) +
+    ylab(paste0(c2str, ": ", round(pc$percentVar[nc2] * 100), "% variance"))
+  }
+pca_plot(comps, 1, 2, "phenotype")
+```
+
+## Differential expression
+```{r mirna-dispersion}
+write_results = function(res, fname) {
+  res = data.frame(res) %>% tibble::rownames_to_column() %>%
+    arrange(pvalue)
+  write.table(res, file=fname, quote=FALSE, col.names=TRUE,
+              row.names=FALSE, sep=",")
+}
+full = ~spikein+lignorm+diseaseclass
+dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=full)
+dds = DESeq(dds, fitType='local')
+plotDispEsts(dds)
+```
+
+### Active vs inactive
+```{r active-vs-inactive}
+res = results(dds, contrast=list(c("diseaseclass1", "diseaseclass3", "diseaseclass5"),
+                                 c("diseaseclass2", "diseaseclass4", "diseaseclass7")))
+plotMA(res)
+write_results(res, "active-vs-inactive.csv")
+```
+
+[active vs inactive](active-vs-inactive.csv)
+
+### Active vs inactive (chronic)
+```{r active-vs-inactive (chronic)}
+res = results(dds, contrast=list(c("diseaseclass3", "diseaseclass5"),
+                                 c("diseaseclass2", "diseaseclass4")))
+plotMA(res)
+write_results(res, "active-vs-inactive-chronoic.csv")
+```
+
+[active vs inactive (chronic)](active-vs-inactive-chronic.csv)
+
+### Active vs inactive (acute)
+```{r active-vs-inactive (acute)}
+res = results(dds, contrast=list(c("diseaseclass1"), c("diseaseclass7")))
+plotMA(res)
+write_results(res, "active-vs-inactive-acute.csv")
+```
+
+[active vs inactive (acute)](active-vs-inactive-acute.csv)
+
+### Group 3 to 2
+```{r group3-to-group2}
+res = results(dds, contrast=list(c("diseaseclass3"), c("diseaseclass2")))
+plotMA(res)
+write_results(res, "group3-vs-group2.csv")
+```
+
+[group3 vs group2](group3-vs-group2.csv)
+
+### Group 5 to 4
+```{r group5-to-4}
+res = results(dds, contrast=list(c("diseaseclass5"), c("diseaseclass4")))
+plotMA(res)
+write_results(res, "group5-vs-group4.csv")
+```
+
+[group5 vs group4](group5-vs-group4.csv)
+
+### Group 3 to 4
+```{r group3-to-4}
+res = results(dds, contrast=list(c("diseaseclass3"), c("diseaseclass4")))
+plotMA(res)
+write_results(res, "group3-vs-group4.csv")
+```
+
+[group3 vs group4](group3-vs-group4.csv)
+
+### Group 3 to 7
+```{r group3-to-7}
+res = results(dds, contrast=list(c("diseaseclass3"), c("diseaseclass7")))
+plotMA(res)
+write_results(res, "group3-vs-group7.csv")
+```
+
+[group3 vs group7](group3-vs-group7.csv)
+
+### Group 5 to 7
+```{r group5-to-7}
+res = results(dds, contrast=list(c("diseaseclass5"), c("diseaseclass7")))
+plotMA(res)
+write_results(res, "group5-vs-group7.csv")
+```
+
+[group5 vs group7](group5-vs-group7.csv)
