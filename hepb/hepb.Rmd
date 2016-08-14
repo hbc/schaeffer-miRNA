@@ -299,9 +299,16 @@ spikebarplot = function(toplot) {
 ```
 
 ## Ligation
+There is quite a bit of variability in the ligation controls for the samples:
 
 ```{r ligation}
-spotbarplot(extract_pred(eset, is_ligation))
+ligboxplot = function(toplot) {
+  ggplot(toplot,
+         aes(phenotype, count)) + geom_boxplot() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    facet_wrap(~spot)
+}
+ligboxplot(extract_pred(eset, is_ligation))
 ```
 
 ## Ligation control R^2
@@ -351,6 +358,7 @@ lignorm = function(eset, feature="Ligation_LIG_POS_A") {
   return(lnorm)
 }
 metadata$lignorm = lignorm(eset)
+metadata$ligscale = 2^(-metadata$lignorm)
 ggplot(metadata, aes(sample, lignorm)) + geom_point() +
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank(),
@@ -441,20 +449,16 @@ we have to do something to normalize it.
 Here we fit two models. The first model we fit the full model, including the
 ligation normalization term in the model. Then fit a reduced model without the
 lignorm term to answer the question 'are there miRNA that are affected by the
-ligation efficiency?'
-
-Some miRNA are affected by ligation efficiency more than others.
-
-Ligation efficiency affects the estimated expression level of highly expressed
-genes but has the opposite effect on more lowly expressed genes. Here we
-replace the normalization by library size in DESeq2 recalculate
+ligation efficiency?' We already scaled the counts via the ligation
+normalization scale, so here we are asking are specific genes
+still affected.
 
 ```{r liga}
 full = ~spikein+lignorm+phenotype
 reduced = ~spikein+phenotype
-dds = DESeqDataSetFromMatrix(counts, colData=metadata,
+ncounts = round(counts * metadata$ligscale)
+dds = DESeqDataSetFromMatrix(ncounts, colData=metadata,
                              design=full)
-sizeFactors(dds) = rep(1, ncol(counts))
 dds = DESeq(dds, full=full, reduced=reduced, test="LRT")
 res = results(dds)
 plotMA(res)
@@ -497,6 +501,10 @@ pca_plot(comps, 1, 2, "phenotype")
 ```
 
 ## Differential expression
+Here we ignore the miRNA-specific ligation normalization and just do what
+the NanoString folks suggested, scale the counts to remove the ligation effect
+for each sample.
+
 ```{r mirna-dispersion}
 write_results = function(res, fname) {
   res = data.frame(res) %>% tibble::rownames_to_column() %>%
@@ -504,8 +512,9 @@ write_results = function(res, fname) {
   write.table(res, file=fname, quote=FALSE, col.names=TRUE,
               row.names=FALSE, sep=",")
 }
-full = ~spikein+lignorm+diseaseclass
-dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=full)
+full = ~spikein+diseaseclass
+ncounts = round(counts * metadata$ligscale)
+dds = DESeqDataSetFromMatrix(ncounts, colData=metadata, design=full)
 dds = DESeq(dds, fitType='local')
 plotDispEsts(dds)
 ```
