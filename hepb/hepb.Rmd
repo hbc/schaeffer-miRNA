@@ -443,7 +443,13 @@ ggplot(cdf, aes(libsize)) + geom_histogram() + facet_wrap(~phenotype)
 ```
 
 But there are clearly variations within a class of the library size, so
-we have to do something to normalize it.
+we have to do something to normalize it. I think breaking up the considerations
+makes sense. We'll normalize by total library size with DESeq2, so then we
+are comparing for specific miRNA being overrepresented relative to other
+miRNA. We can also consider overall miRNA expression the way we have done it
+here; we have some evidence that the positive_tolerant samples have more miRNA
+expression than the other samples. It would be good to ask Kit what he thinks
+about this way of looking at the data, whether it is valid or not.
 
 ## Does normalization for ligation effiency buy us anything?
 Here we fit two models. The first model we fit the full model, including the
@@ -451,7 +457,9 @@ ligation normalization term in the model. Then fit a reduced model without the
 lignorm term to answer the question 'are there miRNA that are affected by the
 ligation efficiency?' We already scaled the counts via the ligation
 normalization scale, so here we are asking are specific genes
-still affected.
+still affected. We can see from the MA plot that after doing the sample
+ligation normalization by scaling the counts by the ligation factor, we have
+introduced a mean count dependent ligation effect or each gene.
 
 ```{r liga}
 full = ~spikein+lignorm+phenotype
@@ -469,11 +477,11 @@ knitr::kable(subset(res, padj < 0.05))
 
 ## PCA
 
-It looks like maybe there is some separation along the second principal component
+It looks like maybe there is some separation along the third principal component
 for the samples labelled as positive vs the samples labelled as negative:
 
 ```{r de-setup}
-dds = DESeqDataSetFromMatrix(counts, colData=metadata, design=full)
+dds = DESeqDataSetFromMatrix(ncounts, colData=metadata, design=full)
 vst = varianceStabilizingTransformation(dds)
 pca_loadings = function(object, ntop=500) {
   rv <- matrixStats::rowVars(assay(object))
@@ -497,7 +505,7 @@ pca_plot = function(comps, nc1, nc2, colorby) {
     xlab(paste0(c1str, ": ", round(pc$percentVar[nc1] * 100), "% variance")) +
     ylab(paste0(c2str, ": ", round(pc$percentVar[nc2] * 100), "% variance"))
   }
-pca_plot(comps, 1, 2, "phenotype")
+pca_plot(comps, 3, 4, "phenotype")
 ```
 
 ## Differential expression
