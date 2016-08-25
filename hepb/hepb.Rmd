@@ -542,7 +542,7 @@ write_results(res, "active-vs-inactive.csv")
 res = results(dds, contrast=list(c("diseaseclass3", "diseaseclass5"),
                                  c("diseaseclass2", "diseaseclass4")))
 plotMA(res)
-write_results(res, "active-vs-inactive-chronoic.csv")
+write_results(res, "active-vs-inactive-chronic.csv")
 ```
 
 [active vs inactive (chronic)](active-vs-inactive-chronic.csv)
